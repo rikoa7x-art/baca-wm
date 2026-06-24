@@ -11,6 +11,8 @@ const NVIDIA_MODEL       = 'meta/llama-3.2-11b-vision-instruct';
 const DEFAULT_API_KEY    = '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';
 const LS_KEY_APIKEY      = 'wm_nvidia_key';
 const LS_KEY_DATA        = 'wm_readings';
+// CORS proxy — dibutuhkan karena NVIDIA API tidak support request langsung dari browser
+const CORS_PROXY         = 'https://corsproxy.io/?url=';
 
 // ─── STATE ────────────────────────────────────────────────────────────────────
 const State = {
@@ -178,8 +180,8 @@ function handleImageFile(file) {
   });
 }
 
-// Kompres gambar agar tidak terlalu besar
-function compressImage(file, maxDim, quality) {
+// Kompres gambar — maksimum 512px, kualitas 0.6 agar payload kecil
+function compressImage(file, maxDim = 512, quality = 0.6) {
   return new Promise((resolve) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
@@ -194,11 +196,12 @@ function compressImage(file, maxDim, quality) {
       const canvas = document.createElement('canvas');
       canvas.width = width; canvas.height = height;
       canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-
       const mime    = 'image/jpeg';
       const dataURL = canvas.toDataURL(mime, quality);
       const base64  = dataURL.split(',')[1];
-      resolve({ dataURL, base64, mime });
+      const sizeKB  = Math.round(base64.length * 0.75 / 1024);
+      console.log(`[Image] ${width}x${height} → ${sizeKB} KB base64`);
+      resolve({ dataURL, base64, mime, sizeKB });
     };
     img.src = url;
   });
@@ -210,70 +213,51 @@ function showImagePreview(dataURL) {
   els.capturedImage.classList.remove('hidden');
   els.captureArea.classList.add('has-image');
   els.resultArea.classList.remove('hidden');
-  showProcessingState('Mengirim gambar ke NVIDIA AI…');
+  showProcessingState('Mempersiapkan gambar…');
 }
 
 // ─── NVIDIA API CALL ──────────────────────────────────────────────────────────
 async function analyzeWithNvidia() {
-  showProcessingState('Mengirim gambar ke NVIDIA AI…');
-
   if (!State.apiKey) {
     showErrorState('API Key belum diset. Buka tab Pengaturan.');
     return;
   }
 
-  const prompt = `You are a water meter reading system. Analyze the image carefully.
+  if (location.protocol === 'file:') {
+    showErrorState('Tidak bisa akses AI dari file lokal. Buka via web server.');
+    return;
+  }
 
-Find the number display on the water meter (odometer/digital/analog dial).
-
-Instructions:
-1. Read ALL digits shown on the meter display (usually 4-8 digits)
-2. Ignore units (m³, L, etc) — only return the number
-3. If there are red digits (decimal part), include them with a dot separator
-4. Return ONLY a JSON object, no extra text
-
-Response format:
-{"reading": "12345", "description": "Brief description of what you see on the meter"}
-
-If you cannot read the meter:
-{"reading": null, "description": "Reason why it cannot be read"}`;
+  const prompt = `Analyze this water meter. Return ONLY: {"reading": "12345", "description": "short description"}`;
 
   try {
-    els.processingSubText.textContent = 'Model AI sedang membaca angka…';
-
-    const response = await fetch(`${NVIDIA_BASE_URL}/chat/completions`, {
+    showProcessingState('Menghubungi NVIDIA AI…');
+    const response = await fetch(`${CORS_PROXY}${encodeURIComponent(NVIDIA_BASE_URL + '/chat/completions')}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${State.apiKey}`,
+        'Authorization': `Bearer ${State.apiKey}`
       },
       body: JSON.stringify({
         model: NVIDIA_MODEL,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: prompt,
-              },
-              {
-                type: 'image_url',
-                image_url: {
-                  url: `data:${State.currentImageMime};base64,${State.currentImageBase64}`,
-                },
-              },
-            ],
-          },
-        ],
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            {
+              type: 'image_url',
+              image_url: { url: `data:${State.currentImageMime};base64,${State.currentImageBase64}` }
+            }
+          ]
+        }],
         max_tokens: 300,
         temperature: 0.1,
-        stream: false,
-      }),
+        stream: false
+      })
     });
 
     if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
+      const errData = await response.json().catch(() => null);
       const errMsg  = errData?.detail || errData?.error?.message || `HTTP ${response.status}`;
       if (response.status === 401) throw new Error('API Key tidak valid atau kadaluarsa.');
       if (response.status === 429) throw new Error('Batas permintaan tercapai. Coba beberapa detik lagi.');
