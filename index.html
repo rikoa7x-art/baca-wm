@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0a0f1e" />
+  <meta name="description" content="Aplikasi pembaca angka water meter secara otomatis menggunakan kamera HP dan teknologi OCR." />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Baca Meter Air — Smart OCR</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ===== SPLASH SCREEN ===== -->
+  <div id="splash" class="splash">
+    <div class="splash-content">
+      <div class="splash-icon">
+        <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+          <circle cx="32" cy="32" r="32" fill="url(#splashGrad)"/>
+          <path d="M32 12C32 12 20 24 20 34C20 40.627 25.373 46 32 46C38.627 46 44 40.627 44 34C44 24 32 12 32 12Z" fill="white" opacity="0.9"/>
+          <path d="M27 36L30 39L37 32" stroke="#0a0f1e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <defs>
+            <linearGradient id="splashGrad" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#00c6fb"/>
+              <stop offset="1" stop-color="#005bea"/>
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+      <h1 class="splash-title">Baca Meter Air</h1>
+      <p class="splash-sub">Smart OCR Water Meter Reader</p>
+      <div class="splash-loader">
+        <div class="splash-loader-bar"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MAIN APP ===== -->
+  <div id="app" class="app hidden">
+
+    <!-- TOP BAR -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <div class="topbar-logo">
+          <svg width="28" height="28" viewBox="0 0 64 64" fill="none">
+            <circle cx="32" cy="32" r="32" fill="url(#hdrGrad)"/>
+            <path d="M32 12C32 12 20 24 20 34C20 40.627 25.373 46 32 46C38.627 46 44 40.627 44 34C44 24 32 12 32 12Z" fill="white" opacity="0.9"/>
+            <defs>
+              <linearGradient id="hdrGrad" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#00c6fb"/><stop offset="1" stop-color="#005bea"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div>
+          <div class="topbar-title">Baca Meter Air</div>
+          <div class="topbar-sub">Smart OCR Reader</div>
+        </div>
+      </div>
+      <button class="topbar-btn" id="btnHistory" aria-label="Riwayat">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+        </svg>
+      </button>
+    </header>
+
+    <!-- PAGE: SCAN -->
+    <section id="pageScan" class="page active">
+
+      <!-- DATE/TIME CARD -->
+      <div class="datetime-card glass-card">
+        <div class="datetime-left">
+          <div class="datetime-label">Tanggal Pembacaan</div>
+          <div class="datetime-value" id="displayDate">—</div>
+        </div>
+        <div class="datetime-right">
+          <div class="datetime-label">Waktu</div>
+          <div class="datetime-value" id="displayTime">—</div>
+        </div>
+      </div>
+
+      <!-- METER ID INPUT -->
+      <div class="field-card glass-card">
+        <label class="field-label" for="meterId">ID / Nomor Pelanggan</label>
+        <input class="field-input" id="meterId" type="text" placeholder="Contoh: 001234" autocomplete="off" />
+      </div>
+
+      <!-- CAMERA / PREVIEW AREA -->
+      <div class="capture-area" id="captureArea">
+        <div class="capture-placeholder" id="capturePlaceholder">
+          <div class="capture-icon">
+            <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="url(#camGrad)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+              <defs>
+                <linearGradient id="camGrad" x1="0" y1="0" x2="24" y2="24">
+                  <stop stop-color="#00c6fb"/><stop offset="1" stop-color="#005bea"/>
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+          <p class="capture-hint">Foto angka water meter<br/>untuk dibaca otomatis</p>
+          <div class="capture-tips">
+            <span>💡 Pastikan angka terlihat jelas</span>
+          </div>
+        </div>
+        <img id="capturedImage" class="captured-img hidden" src="" alt="Foto water meter" />
+        <div class="capture-corners" id="captureCorners">
+          <span class="corner tl"></span><span class="corner tr"></span>
+          <span class="corner bl"></span><span class="corner br"></span>
+        </div>
+      </div>
+
+      <!-- CAPTURE BUTTONS -->
+      <div class="capture-btns">
+        <label class="btn btn-primary btn-capture" for="cameraInput" id="btnCameraLabel">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+          Foto Meter
+        </label>
+        <input type="file" id="cameraInput" accept="image/*" capture="environment" class="hidden-input" />
+        <label class="btn btn-secondary btn-gallery" for="galleryInput">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+            <polyline points="21 15 16 10 5 21"/>
+          </svg>
+          Galeri
+        </label>
+        <input type="file" id="galleryInput" accept="image/*" class="hidden-input" />
+      </div>
+
+      <!-- OCR RESULT AREA -->
+      <div id="resultArea" class="result-area hidden">
+        <!-- Processing -->
+        <div id="processingState" class="processing-state hidden">
+          <div class="ocr-spinner"></div>
+          <p class="processing-text">Membaca angka meter…</p>
+          <p class="processing-sub">Harap tunggu sebentar</p>
+        </div>
+
+        <!-- Result -->
+        <div id="resultState" class="result-state hidden">
+          <div class="result-header">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00c6fb" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            <span>Angka berhasil terbaca</span>
+          </div>
+          <div class="result-number-wrap">
+            <div class="result-label">Pembacaan Meter (m³)</div>
+            <input class="result-input" id="resultNumber" type="number" placeholder="0" />
+            <div class="result-hint">Edit jika tidak sesuai</div>
+          </div>
+          <div class="result-confidence" id="resultConfidence"></div>
+          <button class="btn btn-save" id="btnSave">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+            </svg>
+            Simpan Pembacaan
+          </button>
+          <button class="btn btn-outline btn-retry" id="btnRetry">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/>
+            </svg>
+            Foto Ulang
+          </button>
+        </div>
+
+        <!-- Error -->
+        <div id="errorState" class="error-state hidden">
+          <div class="error-icon">⚠️</div>
+          <p class="error-text">Gagal membaca angka otomatis</p>
+          <p class="error-sub">Masukkan angka secara manual:</p>
+          <div class="result-number-wrap">
+            <div class="result-label">Pembacaan Meter (m³)</div>
+            <input class="result-input" id="manualNumber" type="number" placeholder="0" />
+          </div>
+          <button class="btn btn-save" id="btnSaveManual">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            Simpan Manual
+          </button>
+          <button class="btn btn-outline btn-retry" id="btnRetryError">Foto Ulang</button>
+        </div>
+      </div>
+
+      <!-- SUCCESS TOAST -->
+      <div id="successToast" class="toast hidden">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00c6fb" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+        <span id="toastMsg">Data berhasil disimpan!</span>
+      </div>
+
+    </section>
+
+    <!-- PAGE: HISTORY -->
+    <section id="pageHistory" class="page">
+      <div class="history-header">
+        <h2 class="history-title">Riwayat Pembacaan</h2>
+        <div class="history-actions">
+          <button class="btn-icon" id="btnExportCSV" title="Export CSV">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            CSV
+          </button>
+          <button class="btn-icon btn-danger" id="btnClearAll" title="Hapus Semua">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="history-stats glass-card">
+        <div class="stat-item">
+          <div class="stat-value" id="statTotal">0</div>
+          <div class="stat-label">Total Bacaan</div>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item">
+          <div class="stat-value" id="statLastRead">—</div>
+          <div class="stat-label">Terakhir Dibaca</div>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item">
+          <div class="stat-value" id="statPelanggan">0</div>
+          <div class="stat-label">Pelanggan</div>
+        </div>
+      </div>
+
+      <div id="historyList" class="history-list">
+        <div class="history-empty" id="historyEmpty">
+          <div class="history-empty-icon">📊</div>
+          <p>Belum ada data pembacaan</p>
+          <p class="history-empty-sub">Foto meter pertama Anda untuk mulai</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- BOTTOM NAV -->
+    <nav class="bottomnav">
+      <button class="nav-item active" id="navScan" data-page="pageScan">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+          <circle cx="12" cy="13" r="4"/>
+        </svg>
+        <span>Scan</span>
+      </button>
+      <button class="nav-item" id="navHistory" data-page="pageHistory">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+          <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+        </svg>
+        <span>Riwayat</span>
+      </button>
+    </nav>
+
+  </div>
+
+  <!-- CONFIRM MODAL -->
+  <div id="confirmModal" class="modal-overlay hidden">
+    <div class="modal-box glass-card">
+      <div class="modal-icon">🗑️</div>
+      <h3 class="modal-title">Hapus Semua Data?</h3>
+      <p class="modal-text">Tindakan ini tidak dapat dibatalkan. Semua riwayat pembacaan akan dihapus permanen.</p>
+      <div class="modal-btns">
+        <button class="btn btn-outline" id="modalCancel">Batal</button>
+        <button class="btn btn-danger-solid" id="modalConfirm">Hapus Semua</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tesseract.js via CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
