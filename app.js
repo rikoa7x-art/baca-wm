@@ -98,6 +98,10 @@ const els = {
   btnCropRotateRight: $('btnCropRotateRight'),
   btnCropCancel:      $('btnCropCancel'),
   btnCropApply:       $('btnCropApply'),
+  // Photo Modal
+  photoModal:         $('photoModal'),
+  btnPhotoClose:      $('btnPhotoClose'),
+  modalViewImage:     $('modalViewImage'),
 };
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
@@ -250,13 +254,23 @@ function closeCropModal() {
   els.cameraInput.value = '';
 }
 
+function openPhotoModal(imgSrc) {
+  if (els.modalViewImage) els.modalViewImage.src = imgSrc;
+  if (els.photoModal) els.photoModal.classList.remove('hidden');
+}
+
+function closePhotoModal() {
+  if (els.photoModal) els.photoModal.classList.add('hidden');
+  if (els.modalViewImage) els.modalViewImage.src = '';
+}
+
 function applyCrop() {
   if (!State.cropper) return;
 
   // Dapatkan cropped canvas dasar
   const croppedCanvas = State.cropper.getCroppedCanvas({
-    maxWidth: 800,
-    maxHeight: 800,
+    maxWidth: 600,
+    maxHeight: 600,
     imageSmoothingEnabled: true,
     imageSmoothingQuality: 'high'
   });
@@ -540,6 +554,15 @@ function createHistoryItem(entry) {
     e.stopPropagation();
     deleteReading(entry.id);
   });
+
+  // Klik item riwayat untuk melihat foto penuh
+  div.addEventListener('click', (e) => {
+    if (e.target.closest('.history-del')) return;
+    if (entry.imageDataURL) {
+      openPhotoModal(entry.imageDataURL);
+    }
+  });
+
   return div;
 }
 
@@ -641,6 +664,14 @@ function bindEvents() {
   els.modalCancel.addEventListener('click',   () => els.confirmModal.classList.add('hidden'));
   els.modalConfirm.addEventListener('click',  () => { els.confirmModal.classList.add('hidden'); clearAllReadings(); });
   els.confirmModal.addEventListener('click',  (e) => { if (e.target === els.confirmModal) els.confirmModal.classList.add('hidden'); });
+
+  // Photo Modal
+  if (els.btnPhotoClose) els.btnPhotoClose.addEventListener('click', closePhotoModal);
+  if (els.photoModal) {
+    els.photoModal.addEventListener('click', (e) => {
+      if (e.target === els.photoModal) closePhotoModal();
+    });
+  }
 }
 
 // ─── START ────────────────────────────────────────────────────────────────────
