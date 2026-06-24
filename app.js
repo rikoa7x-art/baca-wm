@@ -23,6 +23,7 @@ const State = {
   apiKey:               localStorage.getItem(LS_KEY_APIKEY) || DEFAULT_API_KEY,
   cropper:              null,
   gpsCoords:            null,
+  gpsWatchId:           null,
 };
 
 // ─── DOM REFS ─────────────────────────────────────────────────────────────────
@@ -109,7 +110,7 @@ function init() {
   updateDateTime();
   setInterval(updateDateTime, 1000);
   bindEvents();
-  requestGeolocation();
+  startGpsTracking();
 
   // Pastikan default key tersimpan
   if (!localStorage.getItem(LS_KEY_APIKEY)) {
@@ -179,17 +180,33 @@ function saveApiKey(key) {
 }
 
 // ─── GEOLOCATION ──────────────────────────────────────────────────────────────
-function requestGeolocation() {
+function startGpsTracking() {
+  if (State.gpsWatchId) return; // Sudah berjalan
+
   if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(
+    State.gpsCoords = 'GPS: Mengambil lokasi...';
+    State.gpsWatchId = navigator.geolocation.watchPosition(
       (position) => {
         State.gpsCoords = `${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`;
+        console.log('[GPS] Lokasi diperbarui:', State.gpsCoords);
       },
       (error) => {
         console.warn('Geolocation error:', error);
-        State.gpsCoords = 'GPS: Izin Ditolak/Tidak Aktif';
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            State.gpsCoords = 'GPS: Izin Ditolak';
+            break;
+          case error.POSITION_UNAVAILABLE:
+            State.gpsCoords = 'GPS: Tidak Tersedia';
+            break;
+          case error.TIMEOUT:
+            State.gpsCoords = 'GPS: Waktu Habis';
+            break;
+          default:
+            State.gpsCoords = 'GPS: Tidak Aktif';
+        }
       },
-      { enableHighAccuracy: true, timeout: 6000 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   } else {
     State.gpsCoords = 'GPS: Tidak Didukung';
@@ -201,7 +218,7 @@ function handleImageFile(file) {
   if (!file || !file.type.startsWith('image/')) return;
   State.currentImageMime = file.type || 'image/jpeg';
 
-  requestGeolocation();
+  startGpsTracking();
 
   const url = URL.createObjectURL(file);
   openCropModal(url);
