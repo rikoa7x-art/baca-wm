@@ -53,7 +53,6 @@ const els = {
   capturePlaceholder: $('capturePlaceholder'),
   capturedImage:      $('capturedImage'),
   cameraInput:        $('cameraInput'),
-  galleryInput:       $('galleryInput'),
   // Result
   resultArea:         $('resultArea'),
   processingState:    $('processingState'),
@@ -227,7 +226,6 @@ function closeCropModal() {
   els.cropImage.onload = null;
   els.cropImage.src = '';
   els.cameraInput.value = '';
-  els.galleryInput.value = '';
 }
 
 function applyCrop() {
@@ -394,7 +392,6 @@ function resetScan() {
   els.captureArea.classList.remove('has-image');
   els.resultArea.classList.add('hidden');
   els.cameraInput.value  = '';
-  els.galleryInput.value = '';
 }
 
 // ─── SAVE READING ─────────────────────────────────────────────────────────────
@@ -531,8 +528,7 @@ function bindEvents() {
   if (els.btnSaveApiKey) els.btnSaveApiKey.addEventListener('click',  () => { if (saveApiKey(els.apiKeyInput.value)) showApp(); });
 
   // Camera inputs
-  els.cameraInput.addEventListener('change',  (e) => handleImageFile(e.target.files[0]));
-  els.galleryInput.addEventListener('change', (e) => handleImageFile(e.target.files[0]));
+  if (els.cameraInput) els.cameraInput.addEventListener('change',  (e) => handleImageFile(e.target.files[0]));
 
   // Crop Modal
   if (els.btnCropRotateLeft)  els.btnCropRotateLeft.addEventListener('click',  () => { if (State.cropper) State.cropper.rotate(-90); });
