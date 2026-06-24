@@ -11,6 +11,10 @@ const NVIDIA_MODEL       = 'meta/llama-3.2-11b-vision-instruct';
 const DEFAULT_API_KEY    = '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';
 const LS_KEY_APIKEY      = 'wm_nvidia_key';
 const LS_KEY_DATA        = 'wm_readings';
+const SS_KEY_LOGIN       = 'wm_session';   // sessionStorage — auto-clear saat tab ditutup
+// Kredensial login (hardcoded)
+const LOGIN_USER         = 'riko';
+const LOGIN_PASS         = '12345';
 // CORS proxy — dibutuhkan karena NVIDIA API tidak support request langsung dari browser
 const CORS_PROXY         = 'https://corsproxy.io/?url=';
 
@@ -31,6 +35,12 @@ const $ = (id) => document.getElementById(id);
 
 const els = {
   splash:             $('splash'),
+  loginScreen:        $('loginScreen'),
+  loginUsername:      $('loginUsername'),
+  loginPassword:      $('loginPassword'),
+  btnLoginToggleVis:  $('btnLoginToggleVis'),
+  btnLogin:           $('btnLogin'),
+  loginError:         $('loginError'),
   apiGate:            $('apiGate'),
   app:                $('app'),
   // API Gate
@@ -88,6 +98,8 @@ const els = {
   settingsToggleVis:  $('settingsToggleVis'),
   btnUpdateApiKey:    $('btnUpdateApiKey'),
   settingsTotalData:  $('settingsTotalData'),
+  settingsUsername:   $('settingsUsername'),
+  btnLogout:          $('btnLogout'),
   // Modal
   confirmModal:       $('confirmModal'),
   modalCancel:        $('modalCancel'),
@@ -121,27 +133,80 @@ function init() {
     els.splash.classList.add('fade-out');
     setTimeout(() => {
       els.splash.classList.add('hidden');
-      // Langsung masuk app karena sudah ada API key default
-      if (State.apiKey) {
-        showApp();
+      // Cek apakah sudah login di sesi ini
+      const session = sessionStorage.getItem(SS_KEY_LOGIN);
+      if (session) {
+        // Sudah login — langsung masuk
+        if (State.apiKey) showApp();
+        else showApiGate();
       } else {
-        showApiGate();
+        // Belum login — tampilkan halaman login
+        showLogin();
       }
     }, 500);
   }, 2000);
 }
 
 function showApp() {
+  els.loginScreen.classList.add('hidden');
   els.apiGate.classList.add('hidden');
   els.app.classList.remove('hidden');
   if (els.settingsApiKey) els.settingsApiKey.value = State.apiKey;
 }
 
 function showApiGate() {
+  els.loginScreen.classList.add('hidden');
   els.app.classList.add('hidden');
   els.apiGate.classList.remove('hidden');
   // Pre-fill dengan default key
   if (els.apiKeyInput) els.apiKeyInput.value = DEFAULT_API_KEY;
+}
+
+function showLogin() {
+  els.app.classList.add('hidden');
+  els.apiGate.classList.add('hidden');
+  els.loginScreen.classList.remove('hidden');
+  if (els.loginUsername) els.loginUsername.focus();
+}
+
+// ─── LOGIN ────────────────────────────────────────────────────────────────────────────
+function handleLogin() {
+  const user = els.loginUsername.value.trim();
+  const pass = els.loginPassword.value;
+
+  if (user === LOGIN_USER && pass === LOGIN_PASS) {
+    // Login berhasil — simpan sesi
+    sessionStorage.setItem(SS_KEY_LOGIN, user);
+    els.loginError.classList.add('hidden');
+    // Animasi hilang lalu masuk app
+    els.loginScreen.style.transition = 'opacity 0.4s ease';
+    els.loginScreen.style.opacity = '0';
+    setTimeout(() => {
+      els.loginScreen.style.opacity = '';
+      els.loginScreen.style.transition = '';
+      if (State.apiKey) showApp();
+      else showApiGate();
+    }, 400);
+  } else {
+    // Login gagal — tampilkan error dan animasi shake
+    els.loginError.classList.remove('hidden');
+    // Reset animasi shake
+    els.loginError.style.animation = 'none';
+    els.loginError.offsetHeight; // trigger reflow
+    els.loginError.style.animation = '';
+    els.loginPassword.value = '';
+    els.loginPassword.focus();
+  }
+}
+
+function logout() {
+  sessionStorage.removeItem(SS_KEY_LOGIN);
+  // Reset tampilan login
+  if (els.loginUsername) els.loginUsername.value = '';
+  if (els.loginPassword) els.loginPassword.value = '';
+  if (els.loginError) els.loginError.classList.add('hidden');
+  showLogin();
+  showToast('👋 Anda telah keluar dari aplikasi');
 }
 
 // ─── DATETIME ─────────────────────────────────────────────────────────────────
@@ -328,7 +393,7 @@ function applyCrop() {
   ctx.lineTo(w, h);
   ctx.stroke();
 
-  // 3. Gambar teks watermark
+  // 3. Gambar teks watermark (tanpa emoji agar kompatibel di semua Canvas/Android)
   ctx.fillStyle = '#ffffff';
   ctx.font = `600 ${fontSize}px 'Inter', sans-serif`;
   ctx.textAlign = 'left';
@@ -341,13 +406,13 @@ function applyCrop() {
   const customerId = els.meterId.value.trim() || 'Tanpa ID';
   const gpsStr = State.gpsCoords || 'GPS: Mengambil lokasi...';
 
-  // Baris 1: ID Pelanggan
-  ctx.fillText(`📋 ID: ${customerId}`, padding, h + padding);
+  // Baris 1: ID Pelanggan (teks biasa, tanpa emoji)
+  ctx.fillText(`ID: ${customerId}`, padding, h + padding);
 
   // Baris 2: Waktu & GPS
   ctx.fillStyle = '#8899bb'; // warna text secondary
   ctx.font = `400 ${Math.max(10, Math.round(fontSize * 0.85))}px 'Inter', sans-serif`;
-  ctx.fillText(`🕐 ${dateStr} ${timeStr} | 📍 ${gpsStr}`, padding, h + (padding * 2) + fontSize);
+  ctx.fillText(`${dateStr} ${timeStr} | ${gpsStr}`, padding, h + (padding * 2) + fontSize);
 
   const mime = 'image/jpeg';
   const dataURL = finalCanvas.toDataURL(mime, 0.85);
@@ -379,8 +444,8 @@ async function analyzeWithNvidia() {
   }
 
   if (location.protocol === 'file:') {
-    showErrorState('Tidak bisa akses AI dari file lokal. Buka via web server.');
-    return;
+    console.warn('[WARN] Membuka via file:// — CORS proxy mungkin tidak berfungsi sempurna.');
+    // Tetap lanjutkan, biarkan error muncul jika memang gagal
   }
 
   const prompt = `Analyze this water meter. Return ONLY: {"reading": "12345", "description": "short description"}`;
@@ -500,7 +565,8 @@ function resetScan() {
 
 // ─── SAVE READING ─────────────────────────────────────────────────────────────
 function saveReading(value) {
-  const clean  = String(value).replace(',', '.').trim();
+  // Bug fix: gunakan regex global /,/g agar semua koma diganti, bukan hanya yang pertama
+  const clean  = String(value).replace(/,/g, '.').trim();
   const numVal = parseFloat(clean);
   if (!clean || isNaN(numVal)) { showToast('⚠️ Masukkan angka yang valid!'); return; }
 
@@ -547,7 +613,8 @@ function createHistoryItem(entry) {
   div.dataset.id = entry.id;
 
   const dt      = new Date(entry.timestamp);
-  const dateStr = dt.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  // Bug fix: gunakan toLocaleString agar tanggal DAN waktu tampil dengan benar
+  const dateStr = dt.toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   const thumbHTML = entry.imageDataURL
     ? `<img class="history-thumb" src="${entry.imageDataURL}" alt="Foto meter" loading="lazy" />`
     : `<div class="history-thumb-ph">💧</div>`;
@@ -597,10 +664,13 @@ function clearAllReadings() {
   showToast('🗑️ Semua data dihapus');
 }
 
-// ─── SETTINGS ─────────────────────────────────────────────────────────────────
+// ─── SETTINGS ─────────────────────────────────────────────────────────────────────────────
 function renderSettings() {
   if (els.settingsApiKey)     els.settingsApiKey.value       = State.apiKey;
   if (els.settingsTotalData)  els.settingsTotalData.textContent = `${State.readings.length} bacaan`;
+  // Tampilkan username yang sedang login
+  const user = sessionStorage.getItem(SS_KEY_LOGIN) || '—';
+  if (els.settingsUsername)   els.settingsUsername.textContent  = user;
 }
 
 // ─── EXPORT CSV ───────────────────────────────────────────────────────────────
@@ -640,6 +710,12 @@ function bindEvents() {
   if (els.apiKeyInput)   els.apiKeyInput.addEventListener('keydown',  (e) => { if (e.key === 'Enter') els.btnSaveApiKey.click(); });
   if (els.btnSaveApiKey) els.btnSaveApiKey.addEventListener('click',  () => { if (saveApiKey(els.apiKeyInput.value)) showApp(); });
 
+  // Login Screen
+  if (els.btnLogin) els.btnLogin.addEventListener('click', handleLogin);
+  if (els.loginPassword) els.loginPassword.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleLogin(); });
+  if (els.loginUsername) els.loginUsername.addEventListener('keydown', (e) => { if (e.key === 'Enter') els.loginPassword.focus(); });
+  if (els.btnLoginToggleVis) els.btnLoginToggleVis.addEventListener('click', () => togglePasswordVisibility(els.loginPassword, els.btnLoginToggleVis));
+
   // Camera inputs
   if (els.cameraInput) els.cameraInput.addEventListener('change',  (e) => handleImageFile(e.target.files[0]));
 
@@ -669,6 +745,7 @@ function bindEvents() {
   // Settings
   els.settingsToggleVis.addEventListener('click', () => togglePasswordVisibility(els.settingsApiKey, els.settingsToggleVis));
   els.btnUpdateApiKey.addEventListener('click',   () => { if (saveApiKey(els.settingsApiKey.value)) showToast('✅ API Key berhasil diperbarui!'); });
+  if (els.btnLogout) els.btnLogout.addEventListener('click', logout);
 
   // Export / clear
   els.btnExportCSV.addEventListener('click', exportCSV);
