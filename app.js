@@ -183,29 +183,36 @@ function handleImageFile(file) {
 }
 
 function openCropModal(imageSrc) {
-  els.cropImage.src = imageSrc;
-  els.cropModal.classList.remove('hidden');
-
   // Hancurkan instance cropper lama jika ada
   if (State.cropper) {
     State.cropper.destroy();
     State.cropper = null;
   }
 
-  // Inisialisasi CropperJS
-  State.cropper = new Cropper(els.cropImage, {
-    viewMode: 1,
-    dragMode: 'move',
-    autoCropArea: 0.8,
-    restore: false,
-    guides: true,
-    center: true,
-    highlight: false,
-    cropBoxMovable: true,
-    cropBoxResizable: true,
-    toggleDragModeOnDblclick: false,
-    background: false
-  });
+  // Reset src lama agar event onload terpicu ulang untuk gambar baru
+  els.cropImage.src = '';
+  
+  // Tampilkan modal dulu agar elemen/container memiliki dimensi (lebar/tinggi) di DOM
+  els.cropModal.classList.remove('hidden');
+
+  // Tunggu gambar benar-benar selesai dimuat sebelum inisialisasi Cropper
+  els.cropImage.onload = () => {
+    State.cropper = new Cropper(els.cropImage, {
+      viewMode: 1,
+      dragMode: 'move',
+      autoCropArea: 0.8,
+      restore: false,
+      guides: true,
+      center: true,
+      highlight: false,
+      cropBoxMovable: true,
+      cropBoxResizable: true,
+      toggleDragModeOnDblclick: false,
+      background: false
+    });
+  };
+
+  els.cropImage.src = imageSrc;
 }
 
 function closeCropModal() {
@@ -217,6 +224,7 @@ function closeCropModal() {
   if (els.cropImage.src.startsWith('blob:')) {
     URL.revokeObjectURL(els.cropImage.src);
   }
+  els.cropImage.onload = null;
   els.cropImage.src = '';
   els.cameraInput.value = '';
   els.galleryInput.value = '';
