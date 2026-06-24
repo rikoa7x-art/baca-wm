@@ -1,108 +1,131 @@
 /**
- * WATER METER READER — APP.JS
- * OCR-powered water meter reading using Tesseract.js
+ * WATER METER READER v3 — app.js
+ * Powered by NVIDIA NIM API (OpenAI-compatible) + Vision Model
  */
 
 'use strict';
 
+// ─── CONSTANTS ────────────────────────────────────────────────────────────────
+const NVIDIA_BASE_URL    = 'https://integrate.api.nvidia.com/v1';
+const NVIDIA_MODEL       = 'meta/llama-3.2-11b-vision-instruct';
+const DEFAULT_API_KEY    = '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';
+const LS_KEY_APIKEY      = 'wm_nvidia_key';
+const LS_KEY_DATA        = 'wm_readings';
+
 // ─── STATE ────────────────────────────────────────────────────────────────────
 const State = {
-  readings: JSON.parse(localStorage.getItem('wm_readings') || '[]'),
-  currentImageDataURL: null,
-  worker: null,
-  workerReady: false,
+  readings:             JSON.parse(localStorage.getItem(LS_KEY_DATA) || '[]'),
+  currentImageDataURL:  null,
+  currentImageBase64:   null,
+  currentImageMime:     'image/jpeg',
+  apiKey:               localStorage.getItem(LS_KEY_APIKEY) || DEFAULT_API_KEY,
 };
 
 // ─── DOM REFS ─────────────────────────────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
 
 const els = {
-  splash: $('splash'),
-  app: $('app'),
+  splash:             $('splash'),
+  apiGate:            $('apiGate'),
+  app:                $('app'),
+  // API Gate
+  apiKeyInput:        $('apiKeyInput'),
+  btnToggleVis:       $('btnToggleVis'),
+  btnSaveApiKey:      $('btnSaveApiKey'),
+  apiKeyError:        $('apiKeyError'),
   // Topbar
-  btnHistory: $('btnHistory'),
+  btnHistory:         $('btnHistory'),
+  btnSettings:        $('btnSettings'),
   // Pages
-  pageScan: $('pageScan'),
-  pageHistory: $('pageHistory'),
+  pageScan:           $('pageScan'),
+  pageHistory:        $('pageHistory'),
+  pageSettings:       $('pageSettings'),
   // DateTime
-  displayDate: $('displayDate'),
-  displayTime: $('displayTime'),
-  // Field
-  meterId: $('meterId'),
+  displayDate:        $('displayDate'),
+  displayTime:        $('displayTime'),
+  // Meter field
+  meterId:            $('meterId'),
   // Capture
-  captureArea: $('captureArea'),
+  captureArea:        $('captureArea'),
   capturePlaceholder: $('capturePlaceholder'),
-  captureCorners: $('captureCorners'),
-  capturedImage: $('capturedImage'),
-  cameraInput: $('cameraInput'),
-  galleryInput: $('galleryInput'),
-  btnCameraLabel: $('btnCameraLabel'),
+  capturedImage:      $('capturedImage'),
+  cameraInput:        $('cameraInput'),
+  galleryInput:       $('galleryInput'),
   // Result
-  resultArea: $('resultArea'),
-  processingState: $('processingState'),
-  resultState: $('resultState'),
-  errorState: $('errorState'),
-  resultNumber: $('resultNumber'),
-  manualNumber: $('manualNumber'),
-  resultConfidence: $('resultConfidence'),
-  btnSave: $('btnSave'),
-  btnSaveManual: $('btnSaveManual'),
-  btnRetry: $('btnRetry'),
-  btnRetryError: $('btnRetryError'),
-  successToast: $('successToast'),
-  toastMsg: $('toastMsg'),
+  resultArea:         $('resultArea'),
+  processingState:    $('processingState'),
+  processingSubText:  $('processingSubText'),
+  resultState:        $('resultState'),
+  errorState:         $('errorState'),
+  resultNumber:       $('resultNumber'),
+  manualNumber:       $('manualNumber'),
+  resultAiInfo:       $('resultAiInfo'),
+  errorText:          $('errorText'),
+  btnSave:            $('btnSave'),
+  btnSaveManual:      $('btnSaveManual'),
+  btnRetry:           $('btnRetry'),
+  btnRetryError:      $('btnRetryError'),
+  successToast:       $('successToast'),
+  toastMsg:           $('toastMsg'),
   // History
-  historyList: $('historyList'),
-  historyEmpty: $('historyEmpty'),
-  statTotal: $('statTotal'),
-  statLastRead: $('statLastRead'),
-  statPelanggan: $('statPelanggan'),
-  btnExportCSV: $('btnExportCSV'),
-  btnClearAll: $('btnClearAll'),
+  historyList:        $('historyList'),
+  historyEmpty:       $('historyEmpty'),
+  statTotal:          $('statTotal'),
+  statLastRead:       $('statLastRead'),
+  statPelanggan:      $('statPelanggan'),
+  btnExportCSV:       $('btnExportCSV'),
+  btnClearAll:        $('btnClearAll'),
   // Nav
-  navScan: $('navScan'),
-  navHistory: $('navHistory'),
+  navScan:            $('navScan'),
+  navHistory:         $('navHistory'),
+  navSettings:        $('navSettings'),
+  // Settings
+  settingsApiKey:     $('settingsApiKey'),
+  settingsToggleVis:  $('settingsToggleVis'),
+  btnUpdateApiKey:    $('btnUpdateApiKey'),
+  settingsTotalData:  $('settingsTotalData'),
   // Modal
-  confirmModal: $('confirmModal'),
-  modalCancel: $('modalCancel'),
-  modalConfirm: $('modalConfirm'),
+  confirmModal:       $('confirmModal'),
+  modalCancel:        $('modalCancel'),
+  modalConfirm:       $('modalConfirm'),
 };
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
-async function init() {
+function init() {
   updateDateTime();
   setInterval(updateDateTime, 1000);
-
-  // Preload Tesseract worker in background
-  initTesseractWorker();
-
-  // Bind events
   bindEvents();
 
-  // Show splash then app
+  // Pastikan default key tersimpan
+  if (!localStorage.getItem(LS_KEY_APIKEY)) {
+    localStorage.setItem(LS_KEY_APIKEY, DEFAULT_API_KEY);
+  }
+
   setTimeout(() => {
     els.splash.classList.add('fade-out');
     setTimeout(() => {
       els.splash.classList.add('hidden');
-      els.app.classList.remove('hidden');
+      // Langsung masuk app karena sudah ada API key default
+      if (State.apiKey) {
+        showApp();
+      } else {
+        showApiGate();
+      }
     }, 500);
   }, 2000);
 }
 
-// ─── TESSERACT WORKER ─────────────────────────────────────────────────────────
-async function initTesseractWorker() {
-  try {
-    State.worker = await Tesseract.createWorker('eng', 1, {
-      logger: () => {},
-    });
-    await State.worker.setParameters({
-      tessedit_char_whitelist: '0123456789.,',
-      tessedit_pageseg_mode: '6',
-    });
-    State.workerReady = true;
-  } catch (e) {
-    console.warn('Tesseract init failed, will init on demand:', e);
-  }
+function showApp() {
+  els.apiGate.classList.add('hidden');
+  els.app.classList.remove('hidden');
+  if (els.settingsApiKey) els.settingsApiKey.value = State.apiKey;
+}
+
+function showApiGate() {
+  els.app.classList.add('hidden');
+  els.apiGate.classList.remove('hidden');
+  // Pre-fill dengan default key
+  if (els.apiKeyInput) els.apiKeyInput.value = DEFAULT_API_KEY;
 }
 
 // ─── DATETIME ─────────────────────────────────────────────────────────────────
@@ -121,25 +144,64 @@ function showPage(pageId) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   $(pageId).classList.add('active');
-
-  const navMap = { pageScan: 'navScan', pageHistory: 'navHistory' };
+  const navMap = { pageScan: 'navScan', pageHistory: 'navHistory', pageSettings: 'navSettings' };
   if (navMap[pageId]) $(navMap[pageId]).classList.add('active');
-
   if (pageId === 'pageHistory') renderHistory();
+  if (pageId === 'pageSettings') renderSettings();
 }
 
-// ─── IMAGE PROCESSING ─────────────────────────────────────────────────────────
+// ─── API KEY ──────────────────────────────────────────────────────────────────
+function saveApiKey(key) {
+  key = key.trim();
+  if (!key || (!key.startsWith('nvapi-') && !key.startsWith('sk-'))) {
+    if (els.apiKeyError) els.apiKeyError.textContent = '⚠️ API Key tidak valid. Harus dimulai dengan "nvapi-"';
+    return false;
+  }
+  State.apiKey = key;
+  localStorage.setItem(LS_KEY_APIKEY, key);
+  if (els.apiKeyError) els.apiKeyError.textContent = '';
+  return true;
+}
+
+// ─── IMAGE HANDLING ───────────────────────────────────────────────────────────
 function handleImageFile(file) {
   if (!file || !file.type.startsWith('image/')) return;
+  State.currentImageMime = file.type || 'image/jpeg';
 
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    const dataURL = e.target.result;
+  // Kompres gambar sebelum dikirim ke API
+  compressImage(file, 1024, 0.85).then(({ dataURL, base64, mime }) => {
     State.currentImageDataURL = dataURL;
+    State.currentImageBase64  = base64;
+    State.currentImageMime    = mime;
     showImagePreview(dataURL);
-    startOCR(dataURL);
-  };
-  reader.readAsDataURL(file);
+    analyzeWithNvidia();
+  });
+}
+
+// Kompres gambar agar tidak terlalu besar
+function compressImage(file, maxDim, quality) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      if (width > maxDim || height > maxDim) {
+        const ratio = Math.min(maxDim / width, maxDim / height);
+        width  = Math.round(width  * ratio);
+        height = Math.round(height * ratio);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+
+      const mime    = 'image/jpeg';
+      const dataURL = canvas.toDataURL(mime, quality);
+      const base64  = dataURL.split(',')[1];
+      resolve({ dataURL, base64, mime });
+    };
+    img.src = url;
+  });
 }
 
 function showImagePreview(dataURL) {
@@ -147,242 +209,210 @@ function showImagePreview(dataURL) {
   els.capturedImage.src = dataURL;
   els.capturedImage.classList.remove('hidden');
   els.captureArea.classList.add('has-image');
-  // Show result area with processing state
   els.resultArea.classList.remove('hidden');
-  showProcessingState();
+  showProcessingState('Mengirim gambar ke NVIDIA AI…');
 }
 
-// ─── OCR ──────────────────────────────────────────────────────────────────────
-async function startOCR(dataURL) {
-  showProcessingState();
+// ─── NVIDIA API CALL ──────────────────────────────────────────────────────────
+async function analyzeWithNvidia() {
+  showProcessingState('Mengirim gambar ke NVIDIA AI…');
+
+  if (!State.apiKey) {
+    showErrorState('API Key belum diset. Buka tab Pengaturan.');
+    return;
+  }
+
+  const prompt = `You are a water meter reading system. Analyze the image carefully.
+
+Find the number display on the water meter (odometer/digital/analog dial).
+
+Instructions:
+1. Read ALL digits shown on the meter display (usually 4-8 digits)
+2. Ignore units (m³, L, etc) — only return the number
+3. If there are red digits (decimal part), include them with a dot separator
+4. Return ONLY a JSON object, no extra text
+
+Response format:
+{"reading": "12345", "description": "Brief description of what you see on the meter"}
+
+If you cannot read the meter:
+{"reading": null, "description": "Reason why it cannot be read"}`;
 
   try {
-    // Pre-process image for better OCR
-    const processedDataURL = await preprocessImage(dataURL);
+    els.processingSubText.textContent = 'Model AI sedang membaca angka…';
 
-    let worker = State.worker;
-    if (!worker || !State.workerReady) {
-      // Create worker on demand if not ready
-      worker = await Tesseract.createWorker('eng', 1, { logger: () => {} });
-      await worker.setParameters({
-        tessedit_char_whitelist: '0123456789.,',
-        tessedit_pageseg_mode: '6',
-      });
+    const response = await fetch(`${NVIDIA_BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${State.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: NVIDIA_MODEL,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: prompt,
+              },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:${State.currentImageMime};base64,${State.currentImageBase64}`,
+                },
+              },
+            ],
+          },
+        ],
+        max_tokens: 300,
+        temperature: 0.1,
+        stream: false,
+      }),
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      const errMsg  = errData?.detail || errData?.error?.message || `HTTP ${response.status}`;
+      if (response.status === 401) throw new Error('API Key tidak valid atau kadaluarsa.');
+      if (response.status === 429) throw new Error('Batas permintaan tercapai. Coba beberapa detik lagi.');
+      if (response.status === 413) throw new Error('Gambar terlalu besar. Gunakan foto dengan resolusi lebih kecil.');
+      throw new Error(errMsg);
     }
 
-    const result = await worker.recognize(processedDataURL);
-    const rawText = result.data.text;
-    const confidence = result.data.confidence;
+    const data    = await response.json();
+    const rawText = data?.choices?.[0]?.message?.content || '';
 
-    const extracted = extractMeterNumber(rawText);
+    const parsed = parseAIResponse(rawText);
 
-    if (extracted) {
-      showResultState(extracted, confidence);
+    if (parsed && parsed.reading !== null && parsed.reading !== undefined) {
+      const cleanReading = String(parsed.reading).replace(/[^0-9.,]/g, '');
+      showResultState(cleanReading, parsed.description || '');
     } else {
-      // Try with original image if preprocessed failed
-      const result2 = await worker.recognize(dataURL);
-      const extracted2 = extractMeterNumber(result2.data.text);
-      if (extracted2) {
-        showResultState(extracted2, result2.data.confidence);
-      } else {
-        showErrorState();
-      }
+      showErrorState(`AI: ${parsed?.description || 'Tidak terdeteksi sebagai water meter'}`);
     }
+
   } catch (err) {
-    console.error('OCR Error:', err);
-    showErrorState();
+    console.error('NVIDIA API Error:', err);
+    showErrorState(err.message || 'Gagal menghubungi NVIDIA AI');
   }
 }
 
-// Pre-process image: enhance contrast/brightness for better OCR
-function preprocessImage(dataURL) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      // Scale to optimal size for OCR
-      const maxDim = 1200;
-      let { width, height } = img;
-      if (width > maxDim || height > maxDim) {
-        const ratio = Math.min(maxDim / width, maxDim / height);
-        width = Math.round(width * ratio);
-        height = Math.round(height * ratio);
-      }
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-
-      // Draw original
-      ctx.drawImage(img, 0, 0, width, height);
-
-      // Enhance: increase contrast
-      const imageData = ctx.getImageData(0, 0, width, height);
-      const data = imageData.data;
-      const factor = 1.4; // contrast factor
-
-      for (let i = 0; i < data.length; i += 4) {
-        // Grayscale
-        const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-        // Enhance contrast
-        const enhanced = Math.min(255, Math.max(0, factor * (gray - 128) + 128));
-        // Threshold for cleaner text
-        const threshold = enhanced > 130 ? 255 : 0;
-        data[i] = data[i + 1] = data[i + 2] = threshold;
-      }
-
-      ctx.putImageData(imageData, 0, 0);
-      resolve(canvas.toDataURL('image/png'));
-    };
-    img.src = dataURL;
-  });
-}
-
-// Extract the most likely meter reading from OCR text
-function extractMeterNumber(text) {
+// ─── PARSE AI RESPONSE ────────────────────────────────────────────────────────
+function parseAIResponse(text) {
   if (!text) return null;
-
-  // Clean text: remove non-numeric except dots/commas
-  const cleaned = text.replace(/[^0-9.,\s]/g, ' ').trim();
-
-  // Find all number sequences
-  const numbers = cleaned.match(/\d[\d.,]*/g);
-  if (!numbers || numbers.length === 0) return null;
-
-  // Filter: meter readings are usually 4–8 digits
-  const candidates = numbers
-    .map(n => n.replace(/[.,]/g, ''))
-    .filter(n => n.length >= 3 && n.length <= 9)
-    .sort((a, b) => b.length - a.length); // prefer longer numbers
-
-  if (candidates.length === 0) return null;
-
-  // Return best candidate
-  return parseInt(candidates[0], 10).toString();
+  try {
+    const trimmed = text.trim();
+    // Direct JSON
+    if (trimmed.startsWith('{')) return JSON.parse(trimmed);
+    // JSON in markdown block
+    const mdMatch = trimmed.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+    if (mdMatch) return JSON.parse(mdMatch[1]);
+    // Raw JSON object anywhere in text
+    const objMatch = trimmed.match(/\{[\s\S]*?\}/);
+    if (objMatch) return JSON.parse(objMatch[0]);
+  } catch (_) { /* ignore */ }
+  // Fallback: grab any standalone number sequence
+  const numMatch = text.match(/\b(\d{3,9}(?:[.,]\d+)?)\b/);
+  if (numMatch) return { reading: numMatch[1], description: 'Angka diekstrak dari respons AI' };
+  return null;
 }
 
 // ─── UI STATES ────────────────────────────────────────────────────────────────
-function showProcessingState() {
+function showProcessingState(subText = 'Menganalisis gambar meter…') {
   els.processingState.classList.remove('hidden');
   els.resultState.classList.add('hidden');
   els.errorState.classList.add('hidden');
+  els.processingSubText.textContent = subText;
 }
 
-function showResultState(number, confidence) {
+function showResultState(reading, description) {
   els.processingState.classList.add('hidden');
   els.errorState.classList.add('hidden');
   els.resultState.classList.remove('hidden');
-  els.resultNumber.value = number;
+  els.resultNumber.value = reading;
 
-  // Confidence badge
-  const confInt = Math.round(confidence);
-  let confClass = 'conf-low';
-  let confLabel = 'Rendah';
-  if (confInt >= 75) { confClass = 'conf-high'; confLabel = 'Tinggi'; }
-  else if (confInt >= 50) { confClass = 'conf-mid'; confLabel = 'Sedang'; }
-
-  els.resultConfidence.innerHTML = `
-    Keyakinan OCR: <span class="conf-badge ${confClass}">${confLabel} (${confInt}%)</span>
-    <br/><small style="margin-top:4px;display:block;">Periksa dan edit jika diperlukan</small>
-  `;
+  els.resultAiInfo.innerHTML = description
+    ? `<strong style="color:var(--accent-1)">🤖 Catatan AI:</strong> ${escapeHtml(description)}`
+    : '';
+  els.resultAiInfo.style.display = description ? 'block' : 'none';
 }
 
-function showErrorState() {
+function showErrorState(message = 'Gagal membaca angka secara otomatis') {
   els.processingState.classList.add('hidden');
   els.resultState.classList.add('hidden');
   els.errorState.classList.remove('hidden');
+  els.errorText.textContent = message;
   els.manualNumber.value = '';
 }
 
 // ─── RESET SCAN ───────────────────────────────────────────────────────────────
 function resetScan() {
   State.currentImageDataURL = null;
-  els.capturedImage.src = '';
+  State.currentImageBase64  = null;
+  els.capturedImage.src     = '';
   els.capturedImage.classList.add('hidden');
   els.capturePlaceholder.classList.remove('hidden');
   els.captureArea.classList.remove('has-image');
   els.resultArea.classList.add('hidden');
-  els.cameraInput.value = '';
+  els.cameraInput.value  = '';
   els.galleryInput.value = '';
 }
 
 // ─── SAVE READING ─────────────────────────────────────────────────────────────
 function saveReading(value) {
-  const numVal = parseFloat(value);
-  if (isNaN(numVal) || value === '') {
-    showToast('⚠️ Masukkan angka yang valid!');
-    return;
-  }
+  const clean  = String(value).replace(',', '.').trim();
+  const numVal = parseFloat(clean);
+  if (!clean || isNaN(numVal)) { showToast('⚠️ Masukkan angka yang valid!'); return; }
 
   const entry = {
-    id: Date.now().toString(),
-    meterId: els.meterId.value.trim() || 'Tanpa ID',
-    reading: numVal,
-    timestamp: new Date().toISOString(),
+    id:           Date.now().toString(),
+    meterId:      els.meterId.value.trim() || 'Tanpa ID',
+    reading:      numVal,
+    timestamp:    new Date().toISOString(),
     imageDataURL: State.currentImageDataURL,
   };
 
   State.readings.unshift(entry);
-  localStorage.setItem('wm_readings', JSON.stringify(State.readings));
-
-  showToast(`✅ Pembacaan ${numVal} m³ disimpan!`);
+  localStorage.setItem(LS_KEY_DATA, JSON.stringify(State.readings));
+  showToast(`✅ ${numVal.toLocaleString('id-ID')} m³ berhasil disimpan!`);
   resetScan();
 }
 
 // ─── TOAST ────────────────────────────────────────────────────────────────────
-function showToast(msg, duration = 3000) {
+let toastTimer = null;
+function showToast(msg, duration = 3200) {
+  clearTimeout(toastTimer);
   els.toastMsg.textContent = msg;
   els.successToast.classList.remove('hidden');
-  setTimeout(() => els.successToast.classList.add('hidden'), duration);
+  toastTimer = setTimeout(() => els.successToast.classList.add('hidden'), duration);
 }
 
 // ─── HISTORY ──────────────────────────────────────────────────────────────────
 function renderHistory() {
-  const readings = State.readings;
+  const r = State.readings;
+  els.statTotal.textContent     = r.length;
+  els.statLastRead.textContent  = r.length > 0 ? r[0].reading.toLocaleString('id-ID') + ' m³' : '—';
+  els.statPelanggan.textContent = new Set(r.map(x => x.meterId)).size;
 
-  // Stats
-  els.statTotal.textContent = readings.length;
-  els.statLastRead.textContent = readings.length > 0
-    ? readings[0].reading.toLocaleString('id-ID') + ' m³'
-    : '—';
-  const uniqueIds = new Set(readings.map(r => r.meterId));
-  els.statPelanggan.textContent = uniqueIds.size;
+  Array.from(els.historyList.querySelectorAll('.history-item')).forEach(el => el.remove());
 
-  // List
-  if (readings.length === 0) {
-    els.historyEmpty.classList.remove('hidden');
-    // Remove all items except empty placeholder
-    Array.from(els.historyList.querySelectorAll('.history-item')).forEach(el => el.remove());
-    return;
-  }
+  if (r.length === 0) { els.historyEmpty.classList.remove('hidden'); return; }
   els.historyEmpty.classList.add('hidden');
-
-  // Rebuild list
-  const existingItems = els.historyList.querySelectorAll('.history-item');
-  existingItems.forEach(el => el.remove());
-
-  readings.forEach(entry => {
-    const item = createHistoryItem(entry);
-    els.historyList.insertBefore(item, els.historyEmpty);
-  });
+  r.forEach(entry => els.historyList.insertBefore(createHistoryItem(entry), els.historyEmpty));
 }
 
 function createHistoryItem(entry) {
   const div = document.createElement('div');
-  div.className = 'history-item';
+  div.className  = 'history-item';
   div.dataset.id = entry.id;
 
-  const dt = new Date(entry.timestamp);
-  const dateStr = dt.toLocaleDateString('id-ID', {
-    day: '2-digit', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  });
-
-  let thumbHTML = '';
-  if (entry.imageDataURL) {
-    thumbHTML = `<img class="history-thumb" src="${entry.imageDataURL}" alt="Foto meter" loading="lazy" />`;
-  } else {
-    thumbHTML = `<div class="history-thumb-ph">💧</div>`;
-  }
+  const dt      = new Date(entry.timestamp);
+  const dateStr = dt.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const thumbHTML = entry.imageDataURL
+    ? `<img class="history-thumb" src="${entry.imageDataURL}" alt="Foto meter" loading="lazy" />`
+    : `<div class="history-thumb-ph">💧</div>`;
 
   div.innerHTML = `
     ${thumbHTML}
@@ -397,55 +427,48 @@ function createHistoryItem(entry) {
         <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
         <path d="M10 11v6"/><path d="M14 11v6"/>
       </svg>
-    </button>
-  `;
+    </button>`;
 
   div.querySelector('.history-del').addEventListener('click', (e) => {
     e.stopPropagation();
     deleteReading(entry.id);
   });
-
   return div;
 }
 
 function deleteReading(id) {
   State.readings = State.readings.filter(r => r.id !== id);
-  localStorage.setItem('wm_readings', JSON.stringify(State.readings));
+  localStorage.setItem(LS_KEY_DATA, JSON.stringify(State.readings));
   renderHistory();
   showToast('🗑️ Data dihapus');
 }
 
 function clearAllReadings() {
   State.readings = [];
-  localStorage.setItem('wm_readings', JSON.stringify(State.readings));
+  localStorage.setItem(LS_KEY_DATA, JSON.stringify(State.readings));
   renderHistory();
   showToast('🗑️ Semua data dihapus');
 }
 
+// ─── SETTINGS ─────────────────────────────────────────────────────────────────
+function renderSettings() {
+  if (els.settingsApiKey)     els.settingsApiKey.value       = State.apiKey;
+  if (els.settingsTotalData)  els.settingsTotalData.textContent = `${State.readings.length} bacaan`;
+}
+
 // ─── EXPORT CSV ───────────────────────────────────────────────────────────────
 function exportCSV() {
-  if (State.readings.length === 0) {
-    showToast('⚠️ Tidak ada data untuk diexport');
-    return;
-  }
-
+  if (State.readings.length === 0) { showToast('⚠️ Tidak ada data untuk diexport'); return; }
   const header = ['No', 'ID Pelanggan', 'Pembacaan (m³)', 'Tanggal', 'Waktu'];
-  const rows = State.readings.map((r, i) => {
+  const rows   = State.readings.map((r, i) => {
     const dt = new Date(r.timestamp);
-    return [
-      i + 1,
-      `"${r.meterId}"`,
-      r.reading,
-      dt.toLocaleDateString('id-ID'),
-      dt.toLocaleTimeString('id-ID'),
-    ].join(',');
+    return [i + 1, `"${r.meterId}"`, r.reading, dt.toLocaleDateString('id-ID'), dt.toLocaleTimeString('id-ID')].join(',');
   });
-
-  const csv = [header.join(','), ...rows].join('\n');
+  const csv  = [header.join(','), ...rows].join('\n');
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
   a.download = `bacameter_${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
@@ -454,60 +477,58 @@ function exportCSV() {
 
 // ─── UTILITY ──────────────────────────────────────────────────────────────────
 function escapeHtml(str) {
-  return str.replace(/[&<>"']/g, (c) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-  })[c]);
+  return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+}
+
+function togglePasswordVisibility(inputEl, btnEl) {
+  const isPass   = inputEl.type === 'password';
+  inputEl.type   = isPass ? 'text' : 'password';
+  btnEl.style.color = isPass ? 'var(--accent-1)' : '';
 }
 
 // ─── EVENT BINDING ────────────────────────────────────────────────────────────
 function bindEvents() {
-  // Camera input
-  els.cameraInput.addEventListener('change', (e) => handleImageFile(e.target.files[0]));
+  // API Gate
+  if (els.btnToggleVis)  els.btnToggleVis.addEventListener('click',  () => togglePasswordVisibility(els.apiKeyInput, els.btnToggleVis));
+  if (els.apiKeyInput)   els.apiKeyInput.addEventListener('keydown',  (e) => { if (e.key === 'Enter') els.btnSaveApiKey.click(); });
+  if (els.btnSaveApiKey) els.btnSaveApiKey.addEventListener('click',  () => { if (saveApiKey(els.apiKeyInput.value)) showApp(); });
+
+  // Camera inputs
+  els.cameraInput.addEventListener('change',  (e) => handleImageFile(e.target.files[0]));
   els.galleryInput.addEventListener('change', (e) => handleImageFile(e.target.files[0]));
 
-  // Save buttons
-  els.btnSave.addEventListener('click', () => saveReading(els.resultNumber.value));
-  els.btnSaveManual.addEventListener('click', () => saveReading(els.manualNumber.value));
+  // Save & retry
+  els.btnSave.addEventListener('click',        () => saveReading(els.resultNumber.value));
+  els.btnSaveManual.addEventListener('click',  () => saveReading(els.manualNumber.value));
+  els.btnRetry.addEventListener('click',       resetScan);
+  els.btnRetryError.addEventListener('click',  resetScan);
 
-  // Retry buttons
-  els.btnRetry.addEventListener('click', resetScan);
-  els.btnRetryError.addEventListener('click', resetScan);
+  // Enter key on inputs
+  els.resultNumber.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveReading(els.resultNumber.value); });
+  els.manualNumber.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveReading(els.manualNumber.value); });
 
   // Navigation
-  els.navScan.addEventListener('click', () => showPage('pageScan'));
-  els.navHistory.addEventListener('click', () => showPage('pageHistory'));
-  els.btnHistory.addEventListener('click', () => showPage('pageHistory'));
+  els.navScan.addEventListener('click',     () => showPage('pageScan'));
+  els.navHistory.addEventListener('click',  () => showPage('pageHistory'));
+  els.navSettings.addEventListener('click', () => showPage('pageSettings'));
+  els.btnHistory.addEventListener('click',  () => showPage('pageHistory'));
+  els.btnSettings.addEventListener('click', () => showPage('pageSettings'));
 
-  // Export
+  // Settings
+  els.settingsToggleVis.addEventListener('click', () => togglePasswordVisibility(els.settingsApiKey, els.settingsToggleVis));
+  els.btnUpdateApiKey.addEventListener('click',   () => { if (saveApiKey(els.settingsApiKey.value)) showToast('✅ API Key berhasil diperbarui!'); });
+
+  // Export / clear
   els.btnExportCSV.addEventListener('click', exportCSV);
-
-  // Clear all
   els.btnClearAll.addEventListener('click', () => {
-    if (State.readings.length === 0) {
-      showToast('⚠️ Tidak ada data untuk dihapus');
-      return;
-    }
+    if (State.readings.length === 0) { showToast('⚠️ Tidak ada data'); return; }
     els.confirmModal.classList.remove('hidden');
   });
 
-  els.modalCancel.addEventListener('click', () => els.confirmModal.classList.add('hidden'));
-  els.modalConfirm.addEventListener('click', () => {
-    els.confirmModal.classList.add('hidden');
-    clearAllReadings();
-  });
-
-  // Close modal on overlay click
-  els.confirmModal.addEventListener('click', (e) => {
-    if (e.target === els.confirmModal) els.confirmModal.classList.add('hidden');
-  });
-
-  // Allow Enter on result input to save
-  els.resultNumber.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') saveReading(els.resultNumber.value);
-  });
-  els.manualNumber.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') saveReading(els.manualNumber.value);
-  });
+  // Modal
+  els.modalCancel.addEventListener('click',   () => els.confirmModal.classList.add('hidden'));
+  els.modalConfirm.addEventListener('click',  () => { els.confirmModal.classList.add('hidden'); clearAllReadings(); });
+  els.confirmModal.addEventListener('click',  (e) => { if (e.target === els.confirmModal) els.confirmModal.classList.add('hidden'); });
 }
 
 // ─── START ────────────────────────────────────────────────────────────────────

@@ -4,11 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#0a0f1e" />
-  <meta name="description" content="Aplikasi pembaca angka water meter secara otomatis menggunakan kamera HP dan teknologi OCR." />
+  <meta name="description" content="Aplikasi pembaca angka water meter secara otomatis menggunakan NVIDIA AI Vision (Llama 3.2 Vision)." />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>Baca Meter Air — Smart OCR</title>
+  <title>Baca Meter Air — NVIDIA AI Vision</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
@@ -33,10 +33,65 @@
         </svg>
       </div>
       <h1 class="splash-title">Baca Meter Air</h1>
-      <p class="splash-sub">Smart OCR Water Meter Reader</p>
+      <p class="splash-sub">Powered by NVIDIA AI Vision</p>
       <div class="splash-loader">
         <div class="splash-loader-bar"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- ===== API KEY GATE ===== -->
+  <div id="apiGate" class="api-gate hidden">
+    <div class="api-gate-content">
+      <div class="api-gate-icon">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="url(#keyGrad)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+          <defs>
+            <linearGradient id="keyGrad" x1="0" y1="0" x2="24" y2="24">
+              <stop stop-color="#00c6fb"/><stop offset="1" stop-color="#005bea"/>
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+      <h2 class="api-gate-title">NVIDIA AI Key</h2>
+      <p class="api-gate-desc">
+        Aplikasi ini menggunakan <strong>NVIDIA NIM API</strong> dengan model <strong>Llama 3.2 Vision</strong> untuk membaca angka meter secara cepat dan akurat.
+      </p>
+      <div class="api-gate-steps">
+        <div class="api-step">
+          <span class="api-step-num">✓</span>
+          <span>API Key NVIDIA sudah tersedia dan siap digunakan.</span>
+        </div>
+        <div class="api-step">
+          <span class="api-step-num">1</span>
+          <span>Klik <strong>Mulai Gunakan</strong> untuk langsung menggunakan aplikasi</span>
+        </div>
+        <div class="api-step">
+          <span class="api-step-num">2</span>
+          <span>Atau ganti key di <strong>tab Pengaturan</strong> jika diperlukan</span>
+        </div>
+      </div>
+      <div class="api-input-wrap">
+        <input
+          id="apiKeyInput"
+          type="password"
+          class="api-key-input"
+          placeholder="nvapi-..."
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <button class="api-toggle-vis" id="btnToggleVis" aria-label="Tampilkan key">
+          <svg id="eyeIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+          </svg>
+        </button>
+      </div>
+      <p class="api-gate-note" id="apiKeyError"></p>
+      <button class="btn btn-primary api-save-btn" id="btnSaveApiKey">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+        Mulai Gunakan
+      </button>
+      <p class="api-privacy-note">🔒 Key disimpan di browser Anda. Endpoint: integrate.api.nvidia.com</p>
     </div>
   </div>
 
@@ -59,14 +114,23 @@
         </div>
         <div>
           <div class="topbar-title">Baca Meter Air</div>
-          <div class="topbar-sub">Smart OCR Reader</div>
+          <div class="topbar-sub ai-badge">⚡ NVIDIA AI</div>
         </div>
       </div>
-      <button class="topbar-btn" id="btnHistory" aria-label="Riwayat">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-        </svg>
-      </button>
+      <div class="topbar-right">
+        <button class="topbar-btn" id="btnHistory" aria-label="Riwayat">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+            <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+          </svg>
+        </button>
+        <button class="topbar-btn" id="btnSettings" aria-label="Pengaturan">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
+      </div>
     </header>
 
     <!-- PAGE: SCAN -->
@@ -104,9 +168,9 @@
               </defs>
             </svg>
           </div>
-          <p class="capture-hint">Foto angka water meter<br/>untuk dibaca otomatis</p>
+          <p class="capture-hint">Foto angka water meter<br/>untuk dibaca oleh AI</p>
           <div class="capture-tips">
-            <span>💡 Pastikan angka terlihat jelas</span>
+            <span>⚡ NVIDIA AI Vision — Cepat & Akurat</span>
           </div>
         </div>
         <img id="capturedImage" class="captured-img hidden" src="" alt="Foto water meter" />
@@ -136,27 +200,38 @@
         <input type="file" id="galleryInput" accept="image/*" class="hidden-input" />
       </div>
 
-      <!-- OCR RESULT AREA -->
+      <!-- AI RESULT AREA -->
       <div id="resultArea" class="result-area hidden">
         <!-- Processing -->
         <div id="processingState" class="processing-state hidden">
-          <div class="ocr-spinner"></div>
-          <p class="processing-text">Membaca angka meter…</p>
-          <p class="processing-sub">Harap tunggu sebentar</p>
+          <div class="ai-processing-visual">
+            <div class="ai-ring ai-ring-1"></div>
+            <div class="ai-ring ai-ring-2"></div>
+            <div class="ai-ring ai-ring-3"></div>
+            <div class="ai-core">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <path d="M12 2L13.09 8.26L20 9L13.09 9.74L12 16L10.91 9.74L4 9L10.91 8.26L12 2Z" fill="url(#starGrad)"/>
+                <defs><linearGradient id="starGrad" x1="0" y1="0" x2="24" y2="24"><stop stop-color="#00c6fb"/><stop offset="1" stop-color="#005bea"/></linearGradient></defs>
+              </svg>
+            </div>
+          </div>
+          <p class="processing-text">Menganalisis dengan Gemini AI…</p>
+          <p class="processing-sub" id="processingSubText">Membaca angka pada meter air</p>
         </div>
 
         <!-- Result -->
         <div id="resultState" class="result-state hidden">
           <div class="result-header">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00c6fb" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-            <span>Angka berhasil terbaca</span>
+            <span>AI berhasil membaca angka</span>
+            <span class="result-model-badge">NVIDIA</span>
           </div>
           <div class="result-number-wrap">
             <div class="result-label">Pembacaan Meter (m³)</div>
             <input class="result-input" id="resultNumber" type="number" placeholder="0" />
             <div class="result-hint">Edit jika tidak sesuai</div>
           </div>
-          <div class="result-confidence" id="resultConfidence"></div>
+          <div class="result-ai-info" id="resultAiInfo"></div>
           <button class="btn btn-save" id="btnSave">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
@@ -174,7 +249,7 @@
         <!-- Error -->
         <div id="errorState" class="error-state hidden">
           <div class="error-icon">⚠️</div>
-          <p class="error-text">Gagal membaca angka otomatis</p>
+          <p class="error-text" id="errorText">Gagal membaca angka</p>
           <p class="error-sub">Masukkan angka secara manual:</p>
           <div class="result-number-wrap">
             <div class="result-label">Pembacaan Meter (m³)</div>
@@ -241,6 +316,53 @@
       </div>
     </section>
 
+    <!-- PAGE: SETTINGS -->
+    <section id="pageSettings" class="page">
+      <h2 class="history-title" style="margin-bottom:4px;">Pengaturan</h2>
+
+      <div class="settings-card glass-card">
+        <div class="settings-section-title">🤖 Gemini AI</div>
+        <div class="settings-row">
+          <div class="settings-label">API Key</div>
+          <div class="settings-api-wrap">
+            <input id="settingsApiKey" type="password" class="settings-api-input" placeholder="AIza..." autocomplete="off" />
+            <button class="settings-eye-btn" id="settingsToggleVis">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+              </svg>
+            </button>
+          </div>
+          <button class="btn btn-primary settings-save-btn" id="btnUpdateApiKey">Simpan Key</button>
+          <a href="https://build.nvidia.com/" target="_blank" rel="noopener" class="settings-get-key-link">
+            → Dapatkan API Key di NVIDIA Build
+          </a>
+        </div>
+      </div>
+
+      <div class="settings-card glass-card">
+        <div class="settings-section-title">📋 Model AI</div>
+        <div class="settings-model-info">
+          <div class="model-badge-big">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2L13.09 8.26L20 9L13.09 9.74L12 16L10.91 9.74L4 9L10.91 8.26L12 2Z" fill="url(#mGrad)"/><defs><linearGradient id="mGrad" x1="0" y1="0" x2="24" y2="24"><stop stop-color="#00c6fb"/><stop offset="1" stop-color="#005bea"/></linearGradient></defs></svg>
+            llama-3.2-11b-vision
+          </div>
+          <p class="model-desc">Meta Llama 3.2 Vision via NVIDIA NIM — model vision multimodal yang cepat dan akurat untuk membaca angka pada gambar.</p>
+          <div style="margin-top:10px;font-size:0.78rem;color:var(--text-muted);">Endpoint: integrate.api.nvidia.com/v1</div>
+        </div>
+      </div>
+
+      <div class="settings-card glass-card">
+        <div class="settings-section-title">ℹ️ Tentang Aplikasi</div>
+        <div class="about-list">
+          <div class="about-row"><span>Versi</span><span>2.0.0</span></div>
+          <div class="about-row"><span>Engine</span><span>NVIDIA NIM API</span></div>
+          <div class="about-row"><span>Penyimpanan</span><span>Browser (LocalStorage)</span></div>
+          <div class="about-row"><span>Model</span><span>Llama 3.2 11B Vision</span></div>
+          <div class="about-row"><span>Total Data</span><span id="settingsTotalData">0 bacaan</span></div>
+        </div>
+      </div>
+    </section>
+
     <!-- BOTTOM NAV -->
     <nav class="bottomnav">
       <button class="nav-item active" id="navScan" data-page="pageScan">
@@ -256,6 +378,13 @@
           <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
         </svg>
         <span>Riwayat</span>
+      </button>
+      <button class="nav-item" id="navSettings" data-page="pageSettings">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+        <span>Pengaturan</span>
       </button>
     </nav>
 
@@ -274,8 +403,6 @@
     </div>
   </div>
 
-  <!-- Tesseract.js via CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
