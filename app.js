@@ -21,6 +21,7 @@ const State = {
   currentImageBase64:   null,
   currentImageMime:     'image/jpeg',
   apiKey:               localStorage.getItem(LS_KEY_APIKEY) || DEFAULT_API_KEY,
+  cropper:              null,
 };
 
 // ─── DOM REFS ─────────────────────────────────────────────────────────────────
@@ -90,6 +91,13 @@ const els = {
   confirmModal:       $('confirmModal'),
   modalCancel:        $('modalCancel'),
   modalConfirm:       $('modalConfirm'),
+  // Crop Modal
+  cropModal:          $('cropModal'),
+  cropImage:          $('cropImage'),
+  btnCropRotateLeft:  $('btnCropRotateLeft'),
+  btnCropRotateRight: $('btnCropRotateRight'),
+  btnCropCancel:      $('btnCropCancel'),
+  btnCropApply:       $('btnCropApply'),
 };
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
@@ -170,41 +178,78 @@ function handleImageFile(file) {
   if (!file || !file.type.startsWith('image/')) return;
   State.currentImageMime = file.type || 'image/jpeg';
 
-  // Kompres gambar sebelum dikirim ke API
-  compressImage(file, 1024, 0.85).then(({ dataURL, base64, mime }) => {
-    State.currentImageDataURL = dataURL;
-    State.currentImageBase64  = base64;
-    State.currentImageMime    = mime;
-    showImagePreview(dataURL);
-    analyzeWithNvidia();
+  const url = URL.createObjectURL(file);
+  openCropModal(url);
+}
+
+function openCropModal(imageSrc) {
+  els.cropImage.src = imageSrc;
+  els.cropModal.classList.remove('hidden');
+
+  // Hancurkan instance cropper lama jika ada
+  if (State.cropper) {
+    State.cropper.destroy();
+    State.cropper = null;
+  }
+
+  // Inisialisasi CropperJS
+  State.cropper = new Cropper(els.cropImage, {
+    viewMode: 1,
+    dragMode: 'move',
+    autoCropArea: 0.8,
+    restore: false,
+    guides: true,
+    center: true,
+    highlight: false,
+    cropBoxMovable: true,
+    cropBoxResizable: true,
+    toggleDragModeOnDblclick: false,
+    background: false
   });
 }
 
-// Kompres gambar — maksimum 512px, kualitas 0.6 agar payload kecil
-function compressImage(file, maxDim = 512, quality = 0.6) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      let { width, height } = img;
-      if (width > maxDim || height > maxDim) {
-        const ratio = Math.min(maxDim / width, maxDim / height);
-        width  = Math.round(width  * ratio);
-        height = Math.round(height * ratio);
-      }
-      const canvas = document.createElement('canvas');
-      canvas.width = width; canvas.height = height;
-      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-      const mime    = 'image/jpeg';
-      const dataURL = canvas.toDataURL(mime, quality);
-      const base64  = dataURL.split(',')[1];
-      const sizeKB  = Math.round(base64.length * 0.75 / 1024);
-      console.log(`[Image] ${width}x${height} → ${sizeKB} KB base64`);
-      resolve({ dataURL, base64, mime, sizeKB });
-    };
-    img.src = url;
+function closeCropModal() {
+  els.cropModal.classList.add('hidden');
+  if (State.cropper) {
+    State.cropper.destroy();
+    State.cropper = null;
+  }
+  if (els.cropImage.src.startsWith('blob:')) {
+    URL.revokeObjectURL(els.cropImage.src);
+  }
+  els.cropImage.src = '';
+  els.cameraInput.value = '';
+  els.galleryInput.value = '';
+}
+
+function applyCrop() {
+  if (!State.cropper) return;
+
+  // Dapatkan cropped canvas dengan batas resolusi max 800px agar payload kecil dan AI membaca dengan cepat
+  const canvas = State.cropper.getCroppedCanvas({
+    maxWidth: 800,
+    maxHeight: 800,
+    imageSmoothingEnabled: true,
+    imageSmoothingQuality: 'high'
   });
+
+  if (!canvas) {
+    showToast('⚠️ Gagal memotong gambar.');
+    closeCropModal();
+    return;
+  }
+
+  const mime = 'image/jpeg';
+  const dataURL = canvas.toDataURL(mime, 0.85);
+  const base64 = dataURL.split(',')[1];
+
+  State.currentImageDataURL = dataURL;
+  State.currentImageBase64 = base64;
+  State.currentImageMime = mime;
+
+  closeCropModal();
+  showImagePreview(dataURL);
+  analyzeWithNvidia();
 }
 
 function showImagePreview(dataURL) {
@@ -480,6 +525,12 @@ function bindEvents() {
   // Camera inputs
   els.cameraInput.addEventListener('change',  (e) => handleImageFile(e.target.files[0]));
   els.galleryInput.addEventListener('change', (e) => handleImageFile(e.target.files[0]));
+
+  // Crop Modal
+  if (els.btnCropRotateLeft)  els.btnCropRotateLeft.addEventListener('click',  () => { if (State.cropper) State.cropper.rotate(-90); });
+  if (els.btnCropRotateRight) els.btnCropRotateRight.addEventListener('click', () => { if (State.cropper) State.cropper.rotate(90); });
+  if (els.btnCropCancel)      els.btnCropCancel.addEventListener('click',      closeCropModal);
+  if (els.btnCropApply)       els.btnCropApply.addEventListener('click',       applyCrop);
 
   // Save & retry
   els.btnSave.addEventListener('click',        () => saveReading(els.resultNumber.value));

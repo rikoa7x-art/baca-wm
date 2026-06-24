@@ -471,6 +471,80 @@ html, body {
 .modal-btns { display: flex; gap: 10px; }
 .modal-btns .btn { flex: 1; }
 
+/* ── CROP MODAL ── */
+.crop-modal-box {
+  width: 100%;
+  max-width: 440px;
+  padding: 22px 20px 20px;
+  text-align: center;
+  animation: modal-slide 0.25s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.crop-wrapper {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  max-height: 50vh;
+  margin: 0 auto 16px auto;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: #000;
+  border: 1px solid var(--bg-card-border);
+  position: relative;
+}
+
+.crop-wrapper img {
+  max-width: 100%;
+  display: block;
+}
+
+.crop-controls {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.btn-crop-tool {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  color: var(--text-primary);
+  padding: 10px 18px;
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-crop-tool:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--accent-1);
+}
+
+.btn-crop-tool:active {
+  transform: scale(0.96);
+}
+
+/* Customizing CropperJS selection interface colors to match the app theme */
+.cropper-line {
+  background-color: var(--accent-1) !important;
+}
+.cropper-point {
+  background-color: var(--accent-1) !important;
+}
+.cropper-view-box {
+  outline: 2px solid var(--accent-1) !important;
+  outline-color: var(--accent-1) !important;
+}
+.cropper-modal {
+  opacity: 0.75 !important;
+}
+
 ::-webkit-scrollbar { display: none; }
 
 @media (min-width: 480px) { .app, .api-gate { max-width: 480px; margin: 0 auto; } }
