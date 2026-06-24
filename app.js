@@ -22,6 +22,7 @@ const State = {
   currentImageMime:     'image/jpeg',
   apiKey:               localStorage.getItem(LS_KEY_APIKEY) || DEFAULT_API_KEY,
   cropper:              null,
+  gpsCoords:            null,
 };
 
 // ─── DOM REFS ─────────────────────────────────────────────────────────────────
@@ -104,6 +105,7 @@ function init() {
   updateDateTime();
   setInterval(updateDateTime, 1000);
   bindEvents();
+  requestGeolocation();
 
   // Pastikan default key tersimpan
   if (!localStorage.getItem(LS_KEY_APIKEY)) {
@@ -172,10 +174,30 @@ function saveApiKey(key) {
   return true;
 }
 
+// ─── GEOLOCATION ──────────────────────────────────────────────────────────────
+function requestGeolocation() {
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        State.gpsCoords = `${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`;
+      },
+      (error) => {
+        console.warn('Geolocation error:', error);
+        State.gpsCoords = 'GPS: Izin Ditolak/Tidak Aktif';
+      },
+      { enableHighAccuracy: true, timeout: 6000 }
+    );
+  } else {
+    State.gpsCoords = 'GPS: Tidak Didukung';
+  }
+}
+
 // ─── IMAGE HANDLING ───────────────────────────────────────────────────────────
 function handleImageFile(file) {
   if (!file || !file.type.startsWith('image/')) return;
   State.currentImageMime = file.type || 'image/jpeg';
+
+  requestGeolocation();
 
   const url = URL.createObjectURL(file);
   openCropModal(url);
@@ -231,22 +253,73 @@ function closeCropModal() {
 function applyCrop() {
   if (!State.cropper) return;
 
-  // Dapatkan cropped canvas dengan batas resolusi max 800px agar payload kecil dan AI membaca dengan cepat
-  const canvas = State.cropper.getCroppedCanvas({
+  // Dapatkan cropped canvas dasar
+  const croppedCanvas = State.cropper.getCroppedCanvas({
     maxWidth: 800,
     maxHeight: 800,
     imageSmoothingEnabled: true,
     imageSmoothingQuality: 'high'
   });
 
-  if (!canvas) {
+  if (!croppedCanvas) {
     showToast('⚠️ Gagal memotong gambar.');
     closeCropModal();
     return;
   }
 
+  const w = croppedCanvas.width;
+  const h = croppedCanvas.height;
+
+  // Tentukan ukuran font dan tinggi banner secara dinamis agar proporsional
+  const fontSize = Math.max(12, Math.round(h * 0.035));
+  const padding = Math.max(6, Math.round(h * 0.02));
+  const bannerHeight = (fontSize * 2) + (padding * 3);
+
+  // Buat canvas baru yang diperluas tinggi bawahnya untuk menampung teks watermark
+  const finalCanvas = document.createElement('canvas');
+  finalCanvas.width = w;
+  finalCanvas.height = h + bannerHeight;
+
+  const ctx = finalCanvas.getContext('2d');
+
+  // 1. Gambar foto terpotong di bagian atas
+  ctx.drawImage(croppedCanvas, 0, 0);
+
+  // 2. Gambar background banner hitam di bagian bawah yang baru diperluas
+  ctx.fillStyle = '#080d1a';
+  ctx.fillRect(0, h, w, bannerHeight);
+
+  // Garis pemisah tipis antara foto dan watermark
+  ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, h);
+  ctx.lineTo(w, h);
+  ctx.stroke();
+
+  // 3. Gambar teks watermark
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `600 ${fontSize}px 'Inter', sans-serif`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+
+  // Dapatkan data waktu, ID, dan GPS
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+  const timeStr = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const customerId = els.meterId.value.trim() || 'Tanpa ID';
+  const gpsStr = State.gpsCoords || 'GPS: Mengambil lokasi...';
+
+  // Baris 1: ID Pelanggan
+  ctx.fillText(`📋 ID: ${customerId}`, padding, h + padding);
+
+  // Baris 2: Waktu & GPS
+  ctx.fillStyle = '#8899bb'; // warna text secondary
+  ctx.font = `400 ${Math.max(10, Math.round(fontSize * 0.85))}px 'Inter', sans-serif`;
+  ctx.fillText(`🕐 ${dateStr} ${timeStr} | 📍 ${gpsStr}`, padding, h + (padding * 2) + fontSize);
+
   const mime = 'image/jpeg';
-  const dataURL = canvas.toDataURL(mime, 0.85);
+  const dataURL = finalCanvas.toDataURL(mime, 0.85);
   const base64 = dataURL.split(',')[1];
 
   State.currentImageDataURL = dataURL;
