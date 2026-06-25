@@ -81,6 +81,13 @@ const els = {
   btnRetryError:      $('btnRetryError'),
   successToast:       $('successToast'),
   toastMsg:           $('toastMsg'),
+  // Calculations
+  prevReadingResult:   $('prevReadingResult'),
+  usageResult:         $('usageResult'),
+  avg6MonthsResult:    $('avg6MonthsResult'),
+  prevReadingManual:   $('prevReadingManual'),
+  usageManual:         $('usageManual'),
+  avg6MonthsManual:    $('avg6MonthsManual'),
   // History
   historyList:        $('historyList'),
   historyEmpty:       $('historyEmpty'),
@@ -524,6 +531,102 @@ function parseAIResponse(text) {
   return null;
 }
 
+// ─── WATER METER STATS CALCULATIONS ───────────────────────────────────────────
+function calculateWaterStats(currentVal) {
+  const meterId = els.meterId.value.trim() || 'Tanpa ID';
+  const val = parseFloat(currentVal);
+  
+  const customerReadings = State.readings.filter(r => r.meterId === meterId);
+  
+  let prevReading = null;
+  let usage = null;
+  let avg6Months = null;
+  
+  if (customerReadings.length > 0) {
+    prevReading = customerReadings[0].reading;
+    if (!isNaN(val)) {
+      usage = val - prevReading;
+    }
+    
+    const tempReadings = [];
+    if (!isNaN(val)) {
+      tempReadings.push({ reading: val });
+    }
+    tempReadings.push(...customerReadings);
+    
+    const usages = [];
+    for (let i = 0; i < Math.min(6, tempReadings.length - 1); i++) {
+      usages.push(tempReadings[i].reading - tempReadings[i + 1].reading);
+    }
+    
+    if (usages.length > 0) {
+      const sum = usages.reduce((a, b) => a + b, 0);
+      avg6Months = sum / usages.length;
+    }
+  }
+  
+  return { prevReading, usage, avg6Months };
+}
+
+function updateCalculations(currentVal, isManual = false) {
+  const stats = calculateWaterStats(currentVal);
+  
+  const prevEl = isManual ? els.prevReadingManual : els.prevReadingResult;
+  const usageEl = isManual ? els.usageManual : els.usageResult;
+  const avgEl = isManual ? els.avg6MonthsManual : els.avg6MonthsResult;
+  
+  if (stats.prevReading !== null) {
+    prevEl.textContent = `${stats.prevReading.toLocaleString('id-ID')} m³`;
+  } else {
+    prevEl.textContent = '— (Data Baru)';
+  }
+  
+  if (stats.usage !== null) {
+    const sign = stats.usage >= 0 ? '+' : '';
+    usageEl.textContent = `${sign}${stats.usage.toLocaleString('id-ID')} m³`;
+    if (stats.usage < 0) {
+      usageEl.style.color = 'var(--danger)';
+    } else {
+      usageEl.style.color = 'var(--accent-1)';
+    }
+  } else {
+    usageEl.textContent = '—';
+    usageEl.style.color = '';
+  }
+  
+  if (stats.avg6Months !== null) {
+    avgEl.textContent = `${stats.avg6Months.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} m³`;
+  } else {
+    avgEl.textContent = '—';
+  }
+}
+
+function getHistoryItemStats(entry, readingsList) {
+  const customerReadings = readingsList.filter(r => r.meterId === entry.meterId);
+  const index = customerReadings.findIndex(r => r.id === entry.id);
+  
+  let prevReading = null;
+  let usage = null;
+  let avg6Months = null;
+  
+  if (index !== -1 && index < customerReadings.length - 1) {
+    const prevEntry = customerReadings[index + 1];
+    prevReading = prevEntry.reading;
+    usage = entry.reading - prevReading;
+    
+    const activeReadings = customerReadings.slice(index, index + 7);
+    const usages = [];
+    for (let i = 0; i < activeReadings.length - 1; i++) {
+      usages.push(activeReadings[i].reading - activeReadings[i+1].reading);
+    }
+    if (usages.length > 0) {
+      avg6Months = usages.reduce((a, b) => a + b, 0) / usages.length;
+    }
+  }
+  
+  return { prevReading, usage, avg6Months };
+}
+
 // ─── UI STATES ────────────────────────────────────────────────────────────────
 function showProcessingState(subText = 'Menganalisis gambar meter…') {
   els.processingState.classList.remove('hidden');
@@ -537,6 +640,8 @@ function showResultState(reading, description) {
   els.errorState.classList.add('hidden');
   els.resultState.classList.remove('hidden');
   els.resultNumber.value = reading;
+  
+  updateCalculations(reading, false);
 
   els.resultAiInfo.innerHTML = description
     ? `<strong style="color:var(--accent-1)">🤖 Catatan AI:</strong> ${escapeHtml(description)}`
@@ -550,6 +655,8 @@ function showErrorState(message = 'Gagal membaca angka secara otomatis') {
   els.errorState.classList.remove('hidden');
   els.errorText.textContent = message;
   els.manualNumber.value = '';
+  
+  updateCalculations('', true);
 }
 
 // ─── RESET SCAN ───────────────────────────────────────────────────────────────
@@ -620,12 +727,41 @@ function createHistoryItem(entry) {
     ? `<img class="history-thumb" src="${entry.imageDataURL}" alt="Foto meter" loading="lazy" />`
     : `<div class="history-thumb-ph">💧</div>`;
 
+  const stats = getHistoryItemStats(entry, State.readings);
+  let calcHTML = '';
+  if (stats.prevReading !== null) {
+    const sign = stats.usage >= 0 ? '+' : '';
+    const color = stats.usage < 0 ? 'var(--danger)' : 'var(--success)';
+    calcHTML = `
+      <div class="history-calc" style="font-size: 0.74rem; color: var(--text-secondary); margin-top: 3px; display: flex; gap: 6px; flex-wrap: wrap;">
+        <span>Lalu: <strong>${stats.prevReading.toLocaleString('id-ID')} m³</strong></span>
+        <span>•</span>
+        <span style="color: ${color};">Pakai: <strong>${sign}${stats.usage.toLocaleString('id-ID')} m³</strong></span>
+      </div>
+    `;
+  } else {
+    calcHTML = `
+      <div class="history-calc" style="font-size: 0.74rem; color: var(--accent-1); margin-top: 3px; font-weight: 500;">
+        ✨ Pembacaan Pertama (Baru)
+      </div>
+    `;
+  }
+
+  if (stats.avg6Months !== null) {
+    calcHTML += `
+      <div class="history-avg" style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">
+        Rerata 6 bln: <strong>${stats.avg6Months.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} m³</strong>
+      </div>
+    `;
+  }
+
   div.innerHTML = `
     ${thumbHTML}
     <div class="history-info">
       <div class="history-id">📋 ${escapeHtml(entry.meterId)}</div>
       <div class="history-reading">${entry.reading.toLocaleString('id-ID')}<span>m³</span></div>
       <div class="history-date">🕐 ${dateStr}</div>
+      ${calcHTML}
     </div>
     <button class="history-del" data-id="${entry.id}" title="Hapus" aria-label="Hapus">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -677,10 +813,23 @@ function renderSettings() {
 // ─── EXPORT CSV ───────────────────────────────────────────────────────────────
 function exportCSV() {
   if (State.readings.length === 0) { showToast('⚠️ Tidak ada data untuk diexport'); return; }
-  const header = ['No', 'ID Pelanggan', 'Pembacaan (m³)', 'Tanggal', 'Waktu'];
+  const header = ['No', 'ID Pelanggan', 'Pembacaan (m³)', 'Meteran Lalu (m³)', 'Pemakaian (m³)', 'Rata-rata 6 Bulan (m³)', 'Tanggal', 'Waktu'];
   const rows   = State.readings.map((r, i) => {
     const dt = new Date(r.timestamp);
-    return [i + 1, `"${r.meterId}"`, r.reading, dt.toLocaleDateString('id-ID'), dt.toLocaleTimeString('id-ID')].join(',');
+    const stats = getHistoryItemStats(r, State.readings);
+    const prevStr = stats.prevReading !== null ? stats.prevReading : '';
+    const usageStr = stats.usage !== null ? stats.usage : '';
+    const avgStr = stats.avg6Months !== null ? stats.avg6Months.toFixed(2) : '';
+    return [
+      i + 1,
+      `"${r.meterId}"`,
+      r.reading,
+      prevStr,
+      usageStr,
+      avgStr,
+      dt.toLocaleDateString('id-ID'),
+      dt.toLocaleTimeString('id-ID')
+    ].join(',');
   });
   const csv  = [header.join(','), ...rows].join('\n');
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
@@ -731,6 +880,14 @@ function bindEvents() {
   els.btnSaveManual.addEventListener('click',  () => saveReading(els.manualNumber.value));
   els.btnRetry.addEventListener('click',       resetScan);
   els.btnRetryError.addEventListener('click',  resetScan);
+
+  // Live calculation input updates
+  els.resultNumber.addEventListener('input',   (e) => updateCalculations(e.target.value, false));
+  els.manualNumber.addEventListener('input',   (e) => updateCalculations(e.target.value, true));
+  els.meterId.addEventListener('input',        () => {
+    updateCalculations(els.resultNumber.value, false);
+    updateCalculations(els.manualNumber.value, true);
+  });
 
   // Enter key on inputs
   els.resultNumber.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveReading(els.resultNumber.value); });
