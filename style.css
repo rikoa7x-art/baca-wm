@@ -553,19 +553,29 @@ html, body {
   transform: scale(0.96);
 }
 
-/* Customizing CropperJS selection interface colors to match the app theme */
+/* Customizing CropperJS — crop box styled to resemble meter display frame */
 .cropper-line {
   background-color: var(--accent-1) !important;
+  opacity: 0.9 !important;
 }
 .cropper-point {
   background-color: var(--accent-1) !important;
+  width: 12px !important;
+  height: 12px !important;
+  border-radius: 50% !important;
+  box-shadow: 0 0 8px rgba(0, 198, 251, 0.6) !important;
 }
 .cropper-view-box {
-  outline: 2px solid var(--accent-1) !important;
+  outline: 3px solid var(--accent-1) !important;
   outline-color: var(--accent-1) !important;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), 0 0 16px rgba(0, 198, 251, 0.25) !important;
+}
+.cropper-dashed {
+  border-color: rgba(0, 198, 251, 0.35) !important;
 }
 .cropper-modal {
-  opacity: 0.75 !important;
+  opacity: 0.8 !important;
+  background-color: #000 !important;
 }
 
 /* ── PHOTO VIEWER MODAL ── */

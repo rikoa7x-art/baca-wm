@@ -307,7 +307,8 @@ function openCropModal(imageSrc) {
     State.cropper = new Cropper(els.cropImage, {
       viewMode: 1,
       dragMode: 'move',
-      autoCropArea: 0.8,
+      aspectRatio: 3 / 1,          // Persegi panjang horizontal seperti display meter
+      autoCropArea: 0.6,           // Area crop otomatis lebih kecil — fokus ke angka meter
       restore: false,
       guides: true,
       center: true,
