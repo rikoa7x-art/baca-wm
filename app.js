@@ -1,6 +1,6 @@
 /**
  * WATER METER READER v3 — app.js
- * Powered by NVIDIA NIM API (OpenAI-compatible) + Vision Model
+ * Powered by AI Vision API (OpenAI-compatible) + Vision Model
  */
 
 'use strict';
@@ -162,11 +162,9 @@ function showApp() {
 }
 
 function showApiGate() {
-  els.loginScreen.classList.add('hidden');
-  els.app.classList.add('hidden');
-  els.apiGate.classList.remove('hidden');
-  // Pre-fill dengan default key
-  if (els.apiKeyInput) els.apiKeyInput.value = DEFAULT_API_KEY;
+  State.apiKey = DEFAULT_API_KEY;
+  localStorage.setItem(LS_KEY_APIKEY, DEFAULT_API_KEY);
+  showApp();
 }
 
 function showLogin() {
@@ -459,7 +457,7 @@ async function analyzeWithNvidia() {
   const prompt = `Analyze this water meter. Return ONLY: {"reading": "12345", "description": "short description"}`;
 
   try {
-    showProcessingState('Menghubungi NVIDIA AI…');
+    showProcessingState('Menghubungi AI Vision…');
     const response = await fetch(`${CORS_PROXY}${encodeURIComponent(NVIDIA_BASE_URL + '/chat/completions')}`, {
       method: 'POST',
       headers: {
@@ -506,8 +504,8 @@ async function analyzeWithNvidia() {
     }
 
   } catch (err) {
-    console.error('NVIDIA API Error:', err);
-    showErrorState(err.message || 'Gagal menghubungi NVIDIA AI');
+    console.error('AI API Error:', err);
+    showErrorState(err.message || 'Gagal menghubungi AI Vision');
   }
 }
 
