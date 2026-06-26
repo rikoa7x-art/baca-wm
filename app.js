@@ -454,7 +454,7 @@ async function analyzeWithNvidia() {
     // Tetap lanjutkan, biarkan error muncul jika memang gagal
   }
 
-  const prompt = `Analyze this water meter. Return ONLY: {"reading": "12345", "description": "short description"}`;
+  const prompt = `Analyze this water meter. Return ONLY: {"reading": "1234", "description": "short description"}. Note: We only need the first 4 digits from the left.`;
 
   try {
     showProcessingState('Menghubungi AI Vision…');
@@ -497,7 +497,11 @@ async function analyzeWithNvidia() {
     const parsed = parseAIResponse(rawText);
 
     if (parsed && parsed.reading !== null && parsed.reading !== undefined) {
-      const cleanReading = String(parsed.reading).replace(/[^0-9.,]/g, '');
+      // Hanya ambil 4 angka pertama dari depan (sisanya diabaikan)
+      let cleanReading = String(parsed.reading).replace(/[^0-9]/g, '');
+      if (cleanReading.length > 4) {
+        cleanReading = cleanReading.slice(0, 4);
+      }
       showResultState(cleanReading, parsed.description || '');
     } else {
       showErrorState(`AI: ${parsed?.description || 'Tidak terdeteksi sebagai water meter'}`);
